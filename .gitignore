@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Environment
+.env
+
+# Database
+flowmap.db
+
+# Logs
+*.log
+nohup.out
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
