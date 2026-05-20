@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}FlowMap — Dashboard{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <!-- Market Temperature -->
+  <div class="card" style="flex:0 0 220px;">
+    <div class="card-title" data-i18n="temp.title">Market Temperature</div>
+    {% if temp.score is not none %}
+      <div style="font-size:48px; font-weight:700; color:{{ temp.color }}; line-height:1;">{{ temp.score }}</div>
+      <div style="font-size:15px; color:{{ temp.color }}; margin-top:4px;">{{ temp.level }}</div>
+      <div style="margin-top:16px; display:flex; flex-direction:column; gap:6px;">
+        {% for key, val in temp.components.items() %}
+        <div style="display:flex; justify-content:space-between; font-size:12px;">
+          <span class="muted" data-i18n="temp.{{ key }}">{{ key.replace('_',' ').title() }}</span>
+          <span>{{ val if val is not none else '—' }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="muted" style="margin-top:8px;" data-i18n="temp.nodata">No data — run fetch first</div>
+    {% endif %}
+  </div>
+
+  <!-- Fear Index Cards -->
+  <div style="flex:1; min-width:0;">
+    <div class="grid-4">
+      {% for f in fear %}
+      <div class="card">
+        <div class="card-title">{{ f.symbol }}</div>
+        <div style="font-size:26px; font-weight:600;">{{ f.value }}</div>
+        {% if f.change is not none %}
+        <div style="font-size:12px; margin-top:4px;" class="{{ 'up' if f.change < 0 else 'down' }}">
+          {{ f.change_sign }}{{ f.change }}
+        </div>
+        {% endif %}
+        <div class="muted" style="font-size:11px; margin-top:2px;">{{ f.date }}</div>
+      </div>
+      {% else %}
+      <div class="muted" style="padding:8px;" data-i18n="common.nodata">No data</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Sector Summary Table -->
+<div class="card">
+  <div class="section-header">
+    <span class="section-title" data-i18n="sector.perf_title">Sector Performance</span>
+    <a href="/sectors" style="font-size:12px;" data-i18n="sector.full_heatmap">Full heatmap →</a>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th data-i18n="th.sector">Sector</th>
+        <th data-i18n="th.etf">ETF</th>
+        <th data-i18n="th.close">Close</th>
+        <th data-i18n="th.1d">1D</th>
+        <th data-i18n="th.5d">5D</th>
+        <th data-i18n="th.1m">1M</th>
+        <th data-i18n="th.flow">Flow (est.)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in summary %}
+      <tr>
+        <td class="sector-name" data-ticker="{{ s.ticker }}">{{ s.name }}</td>
+        <td><span class="muted">{{ s.ticker }}</span></td>
+        <td>{{ "$%.2f"|format(s.close) if s.close else "—" }}</td>
+        <td class="{{ 'up' if s.ret_1d and s.ret_1d > 0 else 'down' if s.ret_1d and s.ret_1d < 0 else '' }}">
+          {{ "%+.2f%%"|format(s.ret_1d) if s.ret_1d is not none else "—" }}
+        </td>
+        <td class="{{ 'up' if s.ret_5d and s.ret_5d > 0 else 'down' if s.ret_5d and s.ret_5d < 0 else '' }}">
+          {{ "%+.2f%%"|format(s.ret_5d) if s.ret_5d is not none else "—" }}
+        </td>
+        <td class="{{ 'up' if s.ret_1m and s.ret_1m > 0 else 'down' if s.ret_1m and s.ret_1m < 0 else '' }}">
+          {{ "%+.2f%%"|format(s.ret_1m) if s.ret_1m is not none else "—" }}
+        </td>
+        <td class="{{ 'up' if s.flow_m and s.flow_m > 0 else 'down' if s.flow_m and s.flow_m < 0 else '' }}">
+          {% if s.flow_m is not none %}{{ "%+.1f M"|format(s.flow_m) }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted" style="text-align:center;padding:24px;">
+        <span data-i18n="temp.nodata">No data — run fetch first</span>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateSectorNames() {
+  document.querySelectorAll('.sector-name[data-ticker]').forEach(el => {
+    el.textContent = sectorName(el.dataset.ticker);
+  });
+}
+updateSectorNames();
+document.addEventListener('langchange', updateSectorNames);
+
+// Dashboard is server-rendered; reload the page to get fresh data
+window.pageReload = () => location.reload();
+markUpdated();
+</script>
+{% endblock %}

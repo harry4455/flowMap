@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block title %}FlowMap — Fear & Correlation{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <span class="section-title" data-i18n="fear.page_title">Fear Index × Asset Correlation</span>
+  <span class="muted" style="font-size:12px;" data-i18n="fear.subtitle">Pearson r — rolling window</span>
+</div>
+
+<div class="grid-4" id="fear-cards" style="margin-bottom:16px;">
+  <div class="spinner" style="grid-column:1/-1;"></div>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+    <span style="font-weight:600;" data-i18n="fear.spread_title">HYG Credit Spread (Proxy)</span>
+    <span class="muted" style="font-size:11px;" data-i18n="fear.spread_subtitle">HYG/LQD ratio · z-score vs 90D window</span>
+    <div class="chart-controls" style="margin-bottom:0; margin-left:auto;">
+      <button class="btn active" data-spread-window="90">90D</button>
+      <button class="btn" data-spread-window="180">180D</button>
+      <button class="btn" data-spread-window="365">1Y</button>
+    </div>
+  </div>
+  <div id="spread-status" style="display:none;color:#ef5350;padding:8px;font-size:12px;"></div>
+  <div style="display:flex; gap:16px; flex-wrap:wrap;">
+    <div style="display:flex; flex-direction:column; gap:8px; min-width:140px;">
+      <div id="spread-card" style="padding:12px 16px; background:var(--surface2,#1e2130); border-radius:8px;">
+        <div class="muted" style="font-size:11px;" data-i18n="fear.spread_ratio">HYG/LQD Ratio</div>
+        <div id="spread-value" style="font-size:28px; font-weight:600; margin-top:4px;">—</div>
+        <div id="spread-zscore" style="font-size:12px; margin-top:4px;" class="muted"></div>
+        <div id="spread-label" style="font-size:11px; margin-top:2px;" class="muted"></div>
+      </div>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <div id="spread-chart" style="height:120px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-bottom:16px;">
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+      <span style="font-weight:600;" data-i18n="fear.corr_title">Correlation Matrix</span>
+      <div class="chart-controls" style="margin-bottom:0;">
+        <button class="btn active" data-window="20">20D</button>
+        <button class="btn" data-window="60">60D</button>
+        <button class="btn" data-window="120">120D</button>
+      </div>
+    </div>
+    <div id="corr-error" style="display:none;color:#ef5350;padding:8px;font-size:12px;"></div>
+    <div id="corr-chart" style="height:380px;"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+      <span style="font-weight:600;" data-i18n="fear.ts_title">Time Series</span>
+      <select id="ts-symbol" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;">
+        <optgroup label="Fear">
+          <option value="VIX">VIX</option>
+          <option value="VVIX">VVIX</option>
+          <option value="SKEW">SKEW</option>
+          <option value="PUT_CALL">Put/Call</option>
+        </optgroup>
+        <optgroup label="Assets">
+          <option value="SPY">SPY</option>
+          <option value="QQQ">QQQ</option>
+          <option value="TLT">TLT</option>
+          <option value="GLD">GLD</option>
+          <option value="IWM">IWM</option>
+        </optgroup>
+      </select>
+      <div class="chart-controls" style="margin-bottom:0;">
+        <button class="btn active" data-ts-window="90">90D</button>
+        <button class="btn" data-ts-window="180">180D</button>
+        <button class="btn" data-ts-window="365">1Y</button>
+      </div>
+    </div>
+    <div id="ts-error" style="display:none;color:#ef5350;padding:8px;font-size:12px;"></div>
+    <div id="ts-chart" style="height:380px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  if (el) { el.style.display = 'block'; el.textContent = '⚠ ' + msg; }
+}
+
+let corrChart = null, tsChart = null;
+try {
+  corrChart = echarts.init(document.getElementById('corr-chart'), 'dark');
+  document.getElementById('corr-chart').style.background = 'transparent';
+} catch(e) { showError('corr-error', 'Chart init failed: ' + e.message); }
+try {
+  tsChart = echarts.init(document.getElementById('ts-chart'), 'dark');
+  document.getElementById('ts-chart').style.background = 'transparent';
+} catch(e) { showError('ts-error', 'Chart init failed: ' + e.message); }
+
+let corrWindow = 20, tsWindow = 90, tsSymbol = 'VIX', spreadWindow = 90;
+let lastCorrData = null, lastTsData = null, lastSpreadData = null;
+
+let spreadChart = null;
+try {
+  spreadChart = echarts.init(document.getElementById('spread-chart'), 'dark');
+  document.getElementById('spread-chart').style.background = 'transparent';
+} catch(e) {}
+
+function renderSpread(d) {
+  if (!d || d.status === 'no_data' || d.status === 'missing_data') {
+    document.getElementById('spread-value').textContent = '—';
+    document.getElementById('spread-zscore').textContent = t('fear.spread_nodata');
+    document.getElementById('spread-label').textContent = '';
+    return;
+  }
+  const val = d.current != null ? d.current.toFixed(4) : '—';
+  const zs = d.zscore != null ? d.zscore : null;
+  document.getElementById('spread-value').textContent = val;
+
+  if (zs != null) {
+    const sign = zs > 0 ? '+' : '';
+    document.getElementById('spread-zscore').textContent = `z = ${sign}${zs}`;
+    const el = document.getElementById('spread-zscore');
+    el.className = zs < -0.5 ? 'down' : zs > 0.5 ? 'up' : 'muted';
+  } else {
+    document.getElementById('spread-zscore').textContent = '';
+  }
+
+  if (d.label) {
+    const labelMap = {
+      'Stress': t('fear.spread_stress'),
+      'Widening': t('fear.spread_widening'),
+      'Tight': t('fear.spread_tight'),
+      'Tightening': t('fear.spread_tightening'),
+      'Neutral': t('fear.spread_neutral'),
+    };
+    document.getElementById('spread-label').textContent = labelMap[d.label] || d.label;
+  }
+
+  if (!spreadChart || !d.dates?.length) return;
+  spreadChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    grid: { top: 8, right: 12, bottom: 28, left: 55 },
+    xAxis: {
+      type: 'category', data: d.dates,
+      axisLabel: { color: '#8a8fa8', fontSize: 9, formatter: v => v.slice(5) },
+    },
+    yAxis: {
+      type: 'value', scale: true,
+      axisLabel: { color: '#8a8fa8', fontSize: 9 },
+      splitLine: { lineStyle: { color: '#2a2d3a' } },
+    },
+    series: [{
+      type: 'line', data: d.values, smooth: false, symbol: 'none',
+      lineStyle: { width: 1.5, color: '#ffa726' },
+      areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+        { offset: 0, color: 'rgba(255,167,38,0.2)' },
+        { offset: 1, color: 'rgba(255,167,38,0)' },
+      ])},
+    }],
+  }, true);
+}
+
+async function loadSpread(window) {
+  try {
+    const res = await fetch('/api/fear/credit_spread?window=' + window);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    lastSpreadData = await res.json();
+    renderSpread(lastSpreadData);
+  } catch(e) {
+    const el = document.getElementById('spread-status');
+    if (el) { el.style.display = 'block'; el.textContent = '⚠ ' + e.message; }
+  }
+}
+
+async function loadFearCards() {
+  const el = document.getElementById('fear-cards');
+  try {
+    const res = await fetch('/api/fear/current');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.length) { el.innerHTML = '<p class="muted">' + t('common.nodata') + '</p>'; return; }
+    el.innerHTML = data.map(f => {
+      const chg = f.change, cls = chg == null ? '' : chg < 0 ? 'up' : 'down';
+      return `<div class="card">
+        <div class="card-title">${f.symbol}</div>
+        <div style="font-size:28px;font-weight:600;">${f.value}</div>
+        ${chg != null ? `<div class="${cls}" style="font-size:12px;margin-top:4px;">${chg > 0 ? '+' : ''}${chg}</div>` : ''}
+        <div class="muted" style="font-size:11px;margin-top:2px;">${f.date}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<p style="color:#ef5350;padding:8px;">' + t('common.error') + ': ' + e.message + '</p>';
+  }
+}
+
+function renderCorr(d) {
+  if (!corrChart || !d) return;
+  if (!d.symbols || d.symbols.length < 2) {
+    corrChart.setOption({ title: { text: t('common.nodata'), left:'center', top:'center', textStyle:{ color:'#888' } } });
+    return;
+  }
+  const n = d.symbols.length;
+  const data = [];
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      data.push([j, i, d.matrix[i][j]]);
+
+  corrChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: p => {
+        const [xi, yi, v] = p.data;
+        return `${d.symbols[yi]} × ${d.symbols[xi]}<br/><b>r = ${v != null ? v.toFixed(3) : 'n/a'}</b>`;
+      }
+    },
+    grid: { top:10, right:20, bottom:80, left:80 },
+    xAxis: { type:'category', data: d.symbols, axisLabel:{ color:'#8a8fa8', rotate:35, fontSize:11 } },
+    yAxis: { type:'category', data: d.symbols, axisLabel:{ color:'#e0e0e0', fontSize:11 } },
+    visualMap: { min:-1, max:1, show:false, inRange:{ color:['#d32f2f','#263238','#26a69a'] } },
+    series: [{
+      type:'heatmap', data,
+      label: { show:true, formatter: p => p.data[2] != null ? p.data[2].toFixed(2) : '', fontSize:10, color:'#e0e0e0' },
+    }],
+  }, true);
+}
+
+async function loadCorr(window) {
+  if (!corrChart) return;
+  corrChart.showLoading({ text: t('common.loading'), maskColor:'rgba(0,0,0,0.4)', textColor:'#aaa' });
+  try {
+    const res = await fetch('/api/fear/correlation?window=' + window);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    lastCorrData = await res.json();
+    corrChart.hideLoading();
+    renderCorr(lastCorrData);
+  } catch(e) {
+    corrChart && corrChart.hideLoading();
+    showError('corr-error', e.message);
+  }
+}
+
+function renderTs(d, symbol) {
+  if (!tsChart || !d) return;
+  if (!d.dates?.length) {
+    tsChart.setOption({ title: { text: t('common.nodata'), left:'center', top:'center', textStyle:{ color:'#888' } } });
+    return;
+  }
+  tsChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger:'axis', axisPointer:{ type:'cross' } },
+    grid: { top:20, right:20, bottom:50, left:55 },
+    xAxis: { type:'category', data: d.dates, axisLabel:{ color:'#8a8fa8', fontSize:10, formatter: v => v.slice(5) } },
+    yAxis: { type:'value', axisLabel:{ color:'#8a8fa8', fontSize:10 }, splitLine:{ lineStyle:{ color:'#2a2d3a' } } },
+    series: [{
+      name: symbol, type:'line', data: d.values, smooth:false, symbol:'none',
+      lineStyle:{ width:1.5, color:'#4f8ef7' },
+      areaStyle:{ color: new echarts.graphic.LinearGradient(0,0,0,1,[
+        { offset:0, color:'rgba(79,142,247,0.25)' },
+        { offset:1, color:'rgba(79,142,247,0)' },
+      ])},
+    }],
+  }, true);
+}
+
+async function loadTs(symbol, window) {
+  if (!tsChart) return;
+  tsChart.showLoading({ text: t('common.loading'), maskColor:'rgba(0,0,0,0.4)', textColor:'#aaa' });
+  try {
+    const res = await fetch('/api/fear/timeseries/' + symbol + '?window=' + window);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    lastTsData = await res.json();
+    tsChart.hideLoading();
+    renderTs(lastTsData, symbol);
+  } catch(e) {
+    tsChart && tsChart.hideLoading();
+    showError('ts-error', e.message);
+  }
+}
+
+document.querySelectorAll('[data-spread-window]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-spread-window]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    spreadWindow = +btn.dataset.spreadWindow;
+    loadSpread(spreadWindow);
+  });
+});
+
+document.querySelectorAll('[data-window]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-window]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    corrWindow = +btn.dataset.window;
+    loadCorr(corrWindow);
+  });
+});
+document.querySelectorAll('[data-ts-window]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-ts-window]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    tsWindow = +btn.dataset.tsWindow;
+    loadTs(tsSymbol, tsWindow);
+  });
+});
+document.getElementById('ts-symbol').addEventListener('change', e => {
+  tsSymbol = e.target.value;
+  loadTs(tsSymbol, tsWindow);
+});
+
+// Language change: re-render cached data, no extra fetch
+document.addEventListener('langchange', () => {
+  if (lastCorrData)  renderCorr(lastCorrData);
+  if (lastTsData)    renderTs(lastTsData, tsSymbol);
+  if (lastSpreadData) renderSpread(lastSpreadData);
+});
+
+window.addEventListener('resize', () => {
+  corrChart   && corrChart.resize();
+  tsChart     && tsChart.resize();
+  spreadChart && spreadChart.resize();
+});
+
+window.pageReload = () => { loadFearCards(); loadCorr(corrWindow); loadTs(tsSymbol, tsWindow); loadSpread(spreadWindow); };
+window.pageReload();
+markUpdated();
+</script>
+{% endblock %}

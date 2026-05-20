@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}FlowMap — Sector Flows{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <span class="section-title" data-i18n="sectors.page_title">Sector Heatmap</span>
+  <span class="muted" style="font-size:12px;" data-i18n="sectors.subtitle">Daily returns by sector</span>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="chart-controls">
+    <span class="muted" style="font-size:12px; margin-right:4px;" data-i18n="sectors.period">Period:</span>
+    <button class="btn" data-period="1D">1D</button>
+    <button class="btn" data-period="5D">5D</button>
+    <button class="btn active" data-period="1M">1M</button>
+    <button class="btn" data-period="3M">3M</button>
+    <button class="btn" data-period="YTD">YTD</button>
+  </div>
+  <div id="heatmap-error" style="display:none;color:#ef5350;padding:8px;font-size:12px;"></div>
+  <div id="heatmap" style="height:420px;"></div>
+</div>
+
+<div class="card">
+  <div class="section-header">
+    <span class="section-title" data-i18n="sectors.summary">Sector Summary</span>
+  </div>
+  <div id="summary-table"><div class="spinner"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let heatChart = null;
+let currentPeriod = '1M';
+let lastHeatmapData = null;
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  if (el) { el.style.display = 'block'; el.textContent = '⚠ ' + msg; }
+}
+
+try {
+  heatChart = echarts.init(document.getElementById('heatmap'), 'dark');
+  document.getElementById('heatmap').style.background = 'transparent';
+} catch(e) {
+  showError('heatmap-error', 'Chart init failed: ' + e.message);
+}
+
+function renderHeatmap(d) {
+  if (!heatChart || !d) return;
+  if (!d.dates || d.dates.length === 0) {
+    heatChart.setOption({ title: { text: t('common.nodata'), left:'center', top:'center', textStyle:{ color:'#888', fontSize:14 } } });
+    return;
+  }
+  heatChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: p => {
+        const [di, si, val] = p.data;
+        return `<b>${d.sectors[si]}</b> — ${sectorName(d.sectors[si])}<br/>${d.dates[di]}<br/><b style="color:${val>0?'#26a69a':'#ef5350'}">${val>0?'+':''}${val}%</b>`;
+      }
+    },
+    grid: { top: 10, right: 120, bottom: 60, left: 180 },
+    xAxis: {
+      type: 'category', data: d.dates,
+      axisLabel: { color:'#8a8fa8', fontSize:10, formatter: v => v.slice(5), interval: Math.max(0, Math.floor(d.dates.length / 8) - 1) },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'category',
+      data: d.sectors.map(ticker => ticker + '  ' + sectorName(ticker)),
+      axisLabel: { color:'#e0e0e0', fontSize:12 },
+      splitLine: { show: false },
+    },
+    visualMap: {
+      min: -3, max: 3, calculable: true, orient: 'vertical', right: 10, top: 'center',
+      textStyle: { color:'#8a8fa8' },
+      inRange: { color: ['#d32f2f', '#263238', '#26a69a'] },
+    },
+    series: [{ type:'heatmap', data: d.data, emphasis: { itemStyle: { shadowBlur: 6 } } }],
+  }, true);
+}
+
+async function loadHeatmap(period) {
+  if (!heatChart) return;
+  heatChart.showLoading({ text: t('common.loading'), maskColor:'rgba(0,0,0,0.4)', textColor:'#aaa' });
+  try {
+    const res = await fetch('/api/sectors/heatmap?period=' + period);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    lastHeatmapData = await res.json();
+    heatChart.hideLoading();
+    renderHeatmap(lastHeatmapData);
+  } catch(e) {
+    heatChart && heatChart.hideLoading();
+    showError('heatmap-error', e.message);
+  }
+}
+
+function renderSummaryTable(rows) {
+  const el = document.getElementById('summary-table');
+  if (!rows.length) { el.innerHTML = '<p class="muted" style="padding:16px;">' + t('common.nodata') + '</p>'; return; }
+
+  const color = v => v == null ? '' : v > 0 ? 'up' : v < 0 ? 'down' : '';
+  const fmt   = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  const fmtF  = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + ' M';
+
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>${t('th.sector')}</th><th>${t('th.etf')}</th><th>${t('th.close')}</th>
+      <th>${t('th.1d')}</th><th>${t('th.5d')}</th><th>${t('th.1m')}</th><th>${t('th.flow')}</th>
+    </tr></thead>
+    <tbody>${rows.map(s => `
+      <tr>
+        <td>${sectorName(s.ticker)}</td>
+        <td><span class="muted">${s.ticker}</span></td>
+        <td>${s.close ? '$' + s.close.toFixed(2) : '—'}</td>
+        <td class="${color(s.ret_1d)}">${fmt(s.ret_1d)}</td>
+        <td class="${color(s.ret_5d)}">${fmt(s.ret_5d)}</td>
+        <td class="${color(s.ret_1m)}">${fmt(s.ret_1m)}</td>
+        <td class="${color(s.flow_m)}">${fmtF(s.flow_m)}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+let lastSummaryData = null;
+async function loadSummary() {
+  try {
+    const res = await fetch('/api/sectors/summary');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    lastSummaryData = await res.json();
+    renderSummaryTable(lastSummaryData);
+  } catch(e) {
+    document.getElementById('summary-table').innerHTML =
+      '<p style="color:#ef5350;padding:16px;">' + t('common.error') + ': ' + e.message + '</p>';
+  }
+}
+
+document.querySelectorAll('[data-period]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPeriod = btn.dataset.period;
+    loadHeatmap(currentPeriod);
+  });
+});
+
+// On language change: re-render cached data with new translations (no extra fetch)
+document.addEventListener('langchange', () => {
+  if (lastHeatmapData) renderHeatmap(lastHeatmapData);
+  if (lastSummaryData) renderSummaryTable(lastSummaryData);
+});
+
+window.addEventListener('resize', () => heatChart && heatChart.resize());
+
+window.pageReload = () => { loadHeatmap(currentPeriod); loadSummary(); };
+window.pageReload();
+markUpdated();
+</script>
+{% endblock %}

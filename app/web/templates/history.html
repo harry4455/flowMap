@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}FlowMap — History{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <span class="section-title" data-i18n="history.page_title">Market Temperature History</span>
+  <span class="muted" style="font-size:12px;" data-i18n="history.subtitle">VIX · VVIX · SKEW over time</span>
+</div>
+
+<div class="chart-controls" style="margin-bottom:12px;">
+  <button class="btn active" data-days="90">3M</button>
+  <button class="btn" data-days="180">6M</button>
+  <button class="btn" data-days="365">1Y</button>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-title" data-i18n="history.vix_title">VIX History</div>
+  <div id="vix-error" style="display:none;color:#ef5350;padding:8px;font-size:12px;"></div>
+  <div id="vix-chart" style="height:260px;"></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title" data-i18n="history.vvix_title">VVIX (Volatility of VIX)</div>
+    <div id="vvix-chart" style="height:200px;"></div>
+  </div>
+  <div class="card">
+    <div class="card-title" data-i18n="history.skew_title">SKEW Index</div>
+    <div id="skew-chart" style="height:200px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  if (el) { el.style.display = 'block'; el.textContent = '⚠ ' + msg; }
+}
+
+let vixChart = null, vvixChart = null, skewChart = null;
+try {
+  vixChart  = echarts.init(document.getElementById('vix-chart'),  'dark');
+  vvixChart = echarts.init(document.getElementById('vvix-chart'), 'dark');
+  skewChart = echarts.init(document.getElementById('skew-chart'), 'dark');
+  ['vix-chart','vvix-chart','skew-chart'].forEach(id =>
+    document.getElementById(id).style.background = 'transparent'
+  );
+} catch(e) { showError('vix-error', 'Chart init failed: ' + e.message); }
+
+let lastData = {};  // { VIX: {...}, VVIX: {...}, SKEW: {...} }
+let currentDays = 90;
+
+function lineOption(d, color, markLines) {
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger:'axis', axisPointer:{ type:'cross' } },
+    grid: { top:20, right:20, bottom:40, left:55 },
+    xAxis: {
+      type:'category', data: d.dates,
+      axisLabel: { color:'#8a8fa8', fontSize:10, formatter: v => v.slice(5) }
+    },
+    yAxis: {
+      type:'value', axisLabel:{ color:'#8a8fa8', fontSize:10 },
+      splitLine:{ lineStyle:{ color:'#2a2d3a' } }
+    },
+    series: [{
+      type:'line', data: d.values, smooth:false, symbol:'none',
+      lineStyle:{ width:1.5, color },
+      areaStyle:{ color: new echarts.graphic.LinearGradient(0,0,0,1,[
+        { offset:0, color: color + '40' },
+        { offset:1, color: color + '00' },
+      ])},
+      markLine: markLines.length ? {
+        silent:true, lineStyle:{ type:'dashed', color:'#555' },
+        label:{ position:'end', color:'#888', fontSize:10 },
+        data: markLines.map(v => ({ yAxis:v, name: String(v) }))
+      } : undefined,
+    }],
+  };
+}
+
+async function loadChart(chart, symbol, days, color, markLines, errorId) {
+  if (!chart) return;
+  chart.showLoading({ text: t('common.loading'), maskColor:'rgba(0,0,0,0.4)', textColor:'#aaa' });
+  try {
+    const res = await fetch('/api/fear/timeseries/' + symbol + '?window=' + days);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    lastData[symbol] = d;
+    chart.hideLoading();
+    if (!d.dates?.length) {
+      chart.setOption({ title:{ text: t('common.nodata'), left:'center', top:'center', textStyle:{ color:'#888' } } });
+      return;
+    }
+    chart.setOption(lineOption(d, color, markLines), true);
+  } catch(e) {
+    chart && chart.hideLoading();
+    if (errorId) showError(errorId, e.message);
+  }
+}
+
+function loadAll(days) {
+  loadChart(vixChart,  'VIX',  days, '#ef5350', [20, 30],   'vix-error');
+  loadChart(vvixChart, 'VVIX', days, '#ab47bc', [],         null);
+  loadChart(skewChart, 'SKEW', days, '#29b6f6', [130, 150], null);
+}
+
+document.querySelectorAll('[data-days]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-days]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDays = +btn.dataset.days;
+    loadAll(currentDays);
+  });
+});
+
+// Language change: chart options are language-independent (numbers/dates only), just update labels
+document.addEventListener('langchange', () => {
+  // card-title elements have data-i18n, already handled by applyLang()
+  // charts don't have translatable text, no re-render needed
+});
+
+window.addEventListener('resize', () =>
+  [vixChart, vvixChart, skewChart].forEach(c => c && c.resize())
+);
+
+window.pageReload = () => loadAll(currentDays);
+window.pageReload();
+markUpdated();
+</script>
+{% endblock %}
