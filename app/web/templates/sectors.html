@@ -162,6 +162,7 @@
     const btn = e.target.closest('button'); if (!btn) return;
     document.querySelectorAll('#period-tabs button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    if (window._loadSectorsHeatmap) window._loadSectorsHeatmap(btn.dataset.period);
   });
   // Set current time
   const now = new Date();

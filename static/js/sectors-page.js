@@ -70,44 +70,64 @@ function initSectorsPage(sectors) {
   // ── Full heatmap ──────────────────────────────────────────
   const heatEl = document.getElementById('sectors-heatmap');
   if (!heatEl) return;
-  const chart = echarts.init(heatEl);
-  const days = 30;
-  const dates = Array.from({ length: days }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (days - 1 - i));
-    return d.toISOString().slice(5, 10);
-  });
-  const data = [];
-  let r = 13;
-  const rand = () => { r=(r*9301+49297)%233280; return r/233280-.5; };
-  dates.forEach((_, di) => {
-    const market = rand() * 1.6;
-    sectors.forEach((s, si) => {
-      const bias = (s.ret_1m || 0) / 30;
-      const beta = 0.4 + (rand() + 0.5) * 0.8;
-      data.push([di, si, +(market * beta + rand() * 1.2 + bias).toFixed(2)]);
+  const heatChart = echarts.init(heatEl);
+  new ResizeObserver(() => heatChart.resize()).observe(heatEl);
+
+  function renderHeatmap(d) {
+    if (!d || !d.dates || !d.dates.length) {
+      heatChart.setOption({ title: { text: 'No data', left:'center', top:'center', textStyle:{color:T.muted} } });
+      return;
+    }
+    const sectorLabels = d.sectors.map(tk => {
+      const s = sectors.find(x => x.ticker === tk);
+      return `${tk}    ${s ? s.name : tk}`;
     });
-  });
-  chart.setOption({
-    backgroundColor: 'transparent',
-    tooltip: {
-      backgroundColor: '#1a1d27', borderColor: '#2a2d3a',
-      textStyle: { color: '#e0e0e0', fontFamily: T.mono, fontSize: 12 },
-      formatter: p => {
-        const [di, si, v] = p.data;
-        return `<b>${sectors[si].ticker}</b> · ${sectors[si].name}<br/>${dates[di]}<br/>` +
-          `<b style="color:${v>0?T.up:T.down}">${v>0?'+':''}${v}%</b>`;
-      }
-    },
-    grid: { top:8, right:16, bottom:36, left:180 },
-    xAxis: { type:'category', data:dates, axisLine:{lineStyle:{color:T.border}}, axisTick:{show:false},
-      axisLabel:{color:T.muted,fontSize:10,fontFamily:T.mono,interval:2}, splitLine:{show:false} },
-    yAxis: { type:'category', data:sectors.map(s=>`${s.ticker}    ${s.name}`), axisLine:{show:false},
-      axisTick:{show:false}, axisLabel:{color:T.text2,fontSize:12}, splitLine:{show:false}, inverse:true },
-    visualMap: { min:-3, max:3, show:false, inRange:{ color: T.heat } },
-    series: [{ type:'heatmap', data,
-      itemStyle:{ borderRadius:2, borderColor:T.bgHex, borderWidth:1.5 },
-      emphasis:{itemStyle:{borderColor:'#e0e0e0',borderWidth:1}},
-    }],
-  });
-  new ResizeObserver(() => chart.resize()).observe(heatEl);
+    heatChart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: {
+        backgroundColor: '#1a1d27', borderColor: '#2a2d3a',
+        textStyle: { color: '#e0e0e0', fontFamily: T.mono, fontSize: 12 },
+        formatter: p => {
+          const [di, si, v] = p.data;
+          const s = sectors.find(x => x.ticker === d.sectors[si]) || {};
+          return `<b>${d.sectors[si]}</b> · ${s.name || ''}<br/>${d.dates[di]}<br/>` +
+            `<b style="color:${v>0?T.up:T.down}">${v>0?'+':''}${v}%</b>`;
+        }
+      },
+      grid: { top:8, right:16, bottom:36, left:180 },
+      xAxis: { type:'category', data: d.dates, axisLine:{lineStyle:{color:T.border}}, axisTick:{show:false},
+        axisLabel:{color:T.muted,fontSize:10,fontFamily:T.mono,
+          formatter: v => v.slice(5),
+          interval: Math.max(0, Math.floor(d.dates.length / 8) - 1)},
+        splitLine:{show:false} },
+      yAxis: { type:'category', data: sectorLabels, axisLine:{show:false},
+        axisTick:{show:false}, axisLabel:{color:T.text2,fontSize:12}, splitLine:{show:false}, inverse:true },
+      visualMap: { min:-3, max:3, show:false, inRange:{ color: T.heat } },
+      series: [{ type:'heatmap', data: d.data,
+        itemStyle:{ borderRadius:2, borderColor:T.bgHex, borderWidth:1.5 },
+        emphasis:{itemStyle:{borderColor:'#e0e0e0',borderWidth:1}},
+      }],
+    }, true);
+  }
+
+  async function loadHeatmap(period) {
+    heatChart.showLoading({ text:'Loading…', maskColor:'rgba(0,0,0,0.4)', textColor:'#aaa' });
+    try {
+      const res = await fetch('/api/sectors/heatmap?period=' + period);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+      heatChart.hideLoading();
+      renderHeatmap(d);
+    } catch(e) {
+      heatChart.hideLoading();
+      heatChart.setOption({ title:{ text:'Error: ' + e.message, left:'center', top:'center', textStyle:{color:'#ef5350'} } });
+    }
+  }
+
+  // Expose so the period-tabs handler can call it
+  window._loadSectorsHeatmap = loadHeatmap;
+
+  // Initial load
+  const activePeriod = document.querySelector('#period-tabs button.active');
+  loadHeatmap(activePeriod ? activePeriod.dataset.period : '1M');
 }

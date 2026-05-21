@@ -57,11 +57,25 @@ def get_credit_spread(window: int = 90) -> dict:
             return d.isoformat()[:10]
         return str(d)[:10]
 
+    label = None
+    if zscore is not None:
+        if zscore < -1.5:
+            label = "Stress"
+        elif zscore < -0.5:
+            label = "Widening"
+        elif zscore > 1.5:
+            label = "Tight"
+        elif zscore > 0.5:
+            label = "Tightening"
+        else:
+            label = "Neutral"
+
     return {
         "dates": [_to_date_str(d) for d in ratio.index],
         "values": [round(float(v), 4) for v in ratio.values],
         "current": round(current, 4) if current is not None else None,
         "zscore": zscore,
+        "label": label,
         "status": "ok",
     }
 
