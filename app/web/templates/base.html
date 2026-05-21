@@ -4,143 +4,385 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}FlowMap{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="/static/js/i18n.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <style>
+    /* ── Reset ─────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Design tokens ────────────────────────────────── */
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --border: #2a2d3a;
-      --text: #e0e0e0;
-      --muted: #8a8fa8;
-      --accent: #4f8ef7;
-      --up: #26a69a;
-      --down: #ef5350;
+      --bg:           oklch(0.155 0.008 260);
+      --bg-deep:      oklch(0.12 0.008 260);
+      --surface:      oklch(0.195 0.010 260);
+      --surface-2:    oklch(0.225 0.010 260);
+      --border:       oklch(0.28 0.012 260);
+      --border-strong:oklch(0.35 0.014 260);
+      --text:         oklch(0.96 0.005 260);
+      --text-2:       oklch(0.82 0.008 260);
+      --muted:        oklch(0.60 0.012 260);
+      --faint:        oklch(0.45 0.012 260);
+      --accent:       oklch(0.80 0.16 75);
+      --up:           oklch(0.74 0.14 155);
+      --up-dim:       oklch(0.45 0.08 155);
+      --down:         oklch(0.67 0.18 25);
+      --down-dim:     oklch(0.42 0.10 25);
+      --neutral:      oklch(0.55 0.015 260);
+      --radius: 10px;
+      --pad: 20px;
+      --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+      --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
 
-    nav {
-      display: flex; align-items: center; gap: 24px;
-      padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+    html, body { background: var(--bg); }
+    body {
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, oklch(0.30 0.04 75 / 0.06), transparent 60%),
+        radial-gradient(ellipse 80% 50% at 50% 100%, oklch(0.30 0.04 260 / 0.08), transparent 60%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .up   { color: var(--up); }
+    .down { color: var(--down); }
+    .muted{ color: var(--muted); }
+    .neutral{ color: var(--text-2); }
+    a { color: var(--text-2); text-decoration: none; }
+    a:hover { color: var(--text); }
+
+    /* ── Nav ────────────────────────────────────────────── */
+    nav.top {
       position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; gap: 28px;
+      padding: 14px 28px;
+      background: oklch(0.155 0.008 260 / 0.88);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
     }
-    nav .logo { font-size: 18px; font-weight: 700; color: var(--accent); margin-right: auto; }
-    nav a { color: var(--muted); font-size: 13px; }
-    nav a.active, nav a:hover { color: var(--text); }
-
-    #lang-toggle {
-      padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border);
-      background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
-      transition: all .15s; white-space: nowrap;
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 600; font-size: 15px; letter-spacing: -0.01em;
+      color: var(--text); margin-right: 12px;
+      text-decoration: none;
     }
-    #lang-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .logo-mark {
+      width: 22px; height: 22px;
+      display: grid; place-items: center;
+      border-radius: 5px;
+      background: linear-gradient(135deg, var(--accent), oklch(0.65 0.14 50));
+      color: var(--bg-deep);
+      font-family: var(--mono); font-size: 11px; font-weight: 700;
+    }
+    .navlinks { display: flex; gap: 4px; margin-right: auto; }
+    .navlinks a {
+      padding: 6px 12px; border-radius: 6px; font-size: 13px;
+      color: var(--muted); transition: all 0.15s ease;
+    }
+    .navlinks a:hover { color: var(--text); background: var(--surface); }
+    .navlinks a.active {
+      color: var(--text); background: var(--surface);
+      box-shadow: inset 0 0 0 1px var(--border);
+    }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
 
-    .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+    /* Live pill */
+    .live-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 11px 5px 9px;
+      border: 1px solid var(--border); border-radius: 999px;
+      font-size: 11px; color: var(--muted);
+      font-family: var(--mono); letter-spacing: 0.02em;
+      cursor: pointer; background: transparent;
+      transition: all .15s;
+    }
+    .live-pill:hover { border-color: var(--border-strong); color: var(--text-2); }
+    .live-pill .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--up);
+      animation: pulse 2s infinite;
+    }
+    .live-pill.stale { color: var(--accent); border-color: oklch(0.55 0.10 75 / 0.4); }
+    .live-pill.stale .dot { background: var(--accent); animation: none; }
+    .live-pill.very-stale { color: var(--down); border-color: oklch(0.55 0.14 25 / 0.4); background: oklch(0.30 0.08 25 / 0.08); }
+    .live-pill.very-stale .dot { background: var(--down); animation: blink 1.5s ease-in-out infinite; }
 
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 oklch(0.74 0.14 155 / 0.4); }
+      50% { box-shadow: 0 0 0 5px oklch(0.74 0.14 155 / 0); }
+    }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .lang-btn {
+      padding: 5px 11px; background: transparent;
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: 11px; font-family: var(--mono);
+      cursor: pointer; transition: all .15s;
+    }
+    .lang-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .container {
+      position: relative; z-index: 1;
+      max-width: 1440px; margin: 0 auto;
+      padding: 28px 28px 80px;
+    }
+    .page-head {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      margin-bottom: 24px; gap: 24px; flex-wrap: wrap;
+    }
+    .page-head h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+    .page-head .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .ts-row { text-align: right; color: var(--muted); font-size: 11px; font-family: var(--mono); line-height: 1.6; white-space: nowrap; }
+    .ts-row .big-time { color: var(--text-2); font-size: 13px; }
+
+    /* ── Cards ───────────────────────────────────────────── */
     .card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 20px;
+      border-radius: var(--radius); padding: var(--pad); position: relative;
     }
-    .card-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px; }
+    .card-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.10em;
+      color: var(--muted); font-weight: 500; white-space: nowrap;
+    }
+    .section-bar {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 14px; gap: 16px; flex-wrap: wrap;
+    }
+    .section-bar h2 { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
+    .section-bar .meta { color: var(--muted); font-size: 11px; font-family: var(--mono); }
+    .section-bar a.link { color: var(--accent); font-size: 12px; margin-left: 12px; }
+    .section-bar a.link:hover { color: var(--text); }
 
+    /* ── Grids ───────────────────────────────────────────── */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
     .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     @media (max-width: 900px) {
-      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .grid-4 { grid-template-columns: 1fr 1fr; }
     }
-    @media (max-width: 600px) {
-      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    @media (max-width: 600px) { .grid-4 { grid-template-columns: 1fr; } }
+
+    /* ── Segmented control ───────────────────────────────── */
+    .segmented {
+      display: inline-flex; background: var(--bg-deep);
+      border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px;
+    }
+    .segmented button {
+      padding: 5px 11px; background: transparent; border: none;
+      color: var(--muted); font-size: 11px; font-family: var(--mono);
+      letter-spacing: 0.02em; border-radius: 5px; cursor: pointer; transition: all .15s;
+    }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: var(--surface-2); color: var(--text);
+      box-shadow: inset 0 0 0 1px var(--border);
     }
 
-    .up { color: var(--up); }
-    .down { color: var(--down); }
-    .muted { color: var(--muted); }
-
-    .badge {
-      display: inline-block; padding: 2px 8px; border-radius: 4px;
-      font-size: 12px; font-weight: 600;
+    /* ── Select ──────────────────────────────────────────── */
+    .select {
+      background: var(--bg-deep); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 28px 5px 11px; font-size: 12px; font-family: var(--mono);
+      cursor: pointer; appearance: none; -webkit-appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 14px) 50%, calc(100% - 10px) 50%;
+      background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
     }
+    .select:hover { border-color: var(--border-strong); }
 
-    .chart-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-    .btn {
-      padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border);
-      background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
-      transition: all .15s;
-    }
-    .btn:hover, .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-
-    .section-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
-    .section-title { font-size: 16px; font-weight: 600; }
-
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 10px; border-bottom: 1px solid var(--border); }
-    td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255,255,255,.03); }
-
+    /* ── Spinner / shimmer ───────────────────────────────── */
     .spinner {
       width: 24px; height: 24px; border: 3px solid var(--border);
       border-top-color: var(--accent); border-radius: 50%;
       animation: spin .7s linear infinite; margin: 40px auto;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .shimmer {
+      background:
+        linear-gradient(90deg, oklch(0.22 0.01 260/0) 0%, oklch(0.32 0.01 260/.6) 50%, oklch(0.22 0.01 260/0) 100%),
+        var(--bg-deep);
+      background-size: 200% 100%, 100% 100%; background-repeat: no-repeat;
+      animation: shimmer 1.4s linear infinite;
+      border-radius: 4px; color: transparent !important; pointer-events: none;
+    }
+    @keyframes shimmer { 0%{background-position:-100% 0,0 0;} 100%{background-position:200% 0,0 0;} }
 
-    #refresh-status {
-      display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted);
+    /* ── Empty state ─────────────────────────────────────── */
+    .empty-state { text-align: center; padding: 36px 24px; }
+    .empty-state .glyph {
+      display: inline-grid; place-items: center;
+      width: 40px; height: 40px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg-deep);
+      margin-bottom: 14px; color: var(--faint); font-size: 18px;
     }
-    #refresh-status .dot {
-      width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
-      transition: background .3s;
+    .empty-state .ttl { font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 4px; }
+    .empty-state .desc { font-size: 12px; color: var(--muted); max-width: 360px; margin: 0 auto; line-height: 1.55; }
+    .empty-state .desc code {
+      font-family: var(--mono); font-size: 11px; padding: 1px 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text-2); margin: 0 2px;
     }
-    #refresh-status .dot.live { background: var(--up); animation: pulse 2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
-    #refresh-btn {
-      background: none; border: 1px solid var(--border); color: var(--muted);
-      border-radius: 5px; padding: 3px 8px; font-size: 14px; cursor: pointer;
-      transition: all .15s; line-height: 1;
+
+    /* ── Narrative bar ───────────────────────────────────── */
+    .narrative {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 14px 18px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      margin-bottom: 16px;
     }
-    #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
-    #refresh-btn.spinning { animation: spin .6s linear infinite; }
+    .narrative .glyph {
+      width: 28px; height: 28px; flex-shrink: 0;
+      display: grid; place-items: center; border-radius: 6px;
+      background: linear-gradient(135deg, oklch(0.30 0.06 75/.6), oklch(0.25 0.04 260/.6));
+      border: 1px solid var(--border-strong);
+      font-family: var(--mono); font-size: 11px; color: var(--accent);
+    }
+    .narrative .body {
+      flex: 1; font-size: 14px; line-height: 1.55; color: var(--text-2);
+    }
+    .narrative .body strong { color: var(--text); font-weight: 600; }
+    .narrative .stamp {
+      flex-shrink: 0; font-family: var(--mono); font-size: 10px;
+      color: var(--faint); letter-spacing: 0.04em; padding-top: 8px; white-space: nowrap;
+    }
+    .narrative.loading .body {
+      display: flex; align-items: center; gap: 10px; color: var(--muted); font-style: italic;
+    }
+    .narrative.loading .body::before {
+      content: ""; width: 12px; height: 12px; flex-shrink: 0;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+
+    /* ── Glossary tooltips ───────────────────────────────── */
+    [data-term] { cursor: help; border-bottom: 1px dotted oklch(0.5 0.012 260/.7); }
+    [data-term]:hover { border-bottom-color: var(--accent); color: var(--text); }
+    .tooltip-floater {
+      position: fixed; z-index: 9999; max-width: 280px;
+      background: var(--bg-deep); border: 1px solid var(--border-strong);
+      border-radius: 8px; padding: 12px 14px;
+      box-shadow: 0 12px 36px oklch(0.05 0.01 260/.6);
+      pointer-events: none; display: none;
+    }
+    .tooltip-floater.on { display: block; }
+    .tooltip-floater .ttl {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+      color: var(--accent); text-transform: uppercase; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .tooltip-floater .ttl .range { color: var(--muted); font-size: 10px; margin-left: auto; }
+    .tooltip-floater .desc { font-size: 12px; color: var(--text-2); line-height: 1.55; }
+    .tooltip-floater .scale {
+      display: flex; margin-top: 10px; height: 5px; border-radius: 3px; overflow: hidden; background: var(--border);
+    }
+    .tooltip-floater .scale > span { height: 100%; }
+
+    /* ── Anomaly indicators ──────────────────────────────── */
+    [data-anomaly="up"], [data-anomaly="down"] { position: relative; isolation: isolate; }
+    [data-anomaly="up"]::after, [data-anomaly="down"]::after {
+      content: ""; position: absolute; inset: -1px;
+      border-radius: inherit; pointer-events: none; z-index: -1;
+      opacity: .7; animation: anomaly-pulse 3.5s ease-in-out infinite;
+    }
+    [data-anomaly="up"]::after   { box-shadow: inset 0 0 0 1px oklch(0.74 0.14 155/.55), 0 0 24px oklch(0.74 0.14 155/.18); }
+    [data-anomaly="down"]::after { box-shadow: inset 0 0 0 1px oklch(0.67 0.18 25/.6),  0 0 24px oklch(0.67 0.18 25/.20);  }
+    /* Row variant: left accent bar */
+    tr[data-anomaly], .row[data-anomaly] { isolation: auto; }
+    tr[data-anomaly]::after, .row[data-anomaly]::after {
+      inset: 0 auto 0 0; width: 3px; height: 100%;
+      z-index: 0; box-shadow: none; border-radius: 0;
+      animation: anomaly-pulse 3.5s ease-in-out infinite;
+    }
+    tr[data-anomaly="up"]::after,   .row[data-anomaly="up"]::after   { background: var(--up); }
+    tr[data-anomaly="down"]::after, .row[data-anomaly="down"]::after { background: var(--down); }
+    @keyframes anomaly-pulse { 0%,100%{opacity:.55;} 50%{opacity:1;} }
+    .anomaly-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em;
+      text-transform: uppercase; padding: 2px 6px;
+      border-radius: 999px; border: 1px solid currentColor;
+      background: var(--bg-deep);
+    }
+    [data-anomaly="up"]   .anomaly-badge { color: var(--up); }
+    [data-anomaly="down"] .anomaly-badge { color: var(--down); }
+
+    /* ── Table ───────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left; color: var(--muted); font-size: 10px;
+      font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 8px 12px; border-bottom: 1px solid var(--border);
+      background: var(--bg-deep);
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-2); }
+
+    {% block head_styles %}{% endblock %}
   </style>
   {% block head %}{% endblock %}
 </head>
 <body>
-<nav>
-  <span class="logo">FlowMap</span>
-  <a href="/" {% if request.url.path == "/" %}class="active"{% endif %} data-i18n="nav.dashboard">Dashboard</a>
-  <a href="/sectors" {% if request.url.path == "/sectors" %}class="active"{% endif %} data-i18n="nav.sectors">Sectors</a>
-  <a href="/fear" {% if request.url.path == "/fear" %}class="active"{% endif %} data-i18n="nav.fear">Fear &amp; Correlation</a>
-  <a href="/history" {% if request.url.path == "/history" %}class="active"{% endif %} data-i18n="nav.history">History</a>
-  <div id="refresh-status">
-    <span class="dot" id="status-dot"></span>
-    <span data-i18n="refresh.updated">Updated</span>
-    <span id="updated-time">—</span>
-    <button id="refresh-btn" onclick="manualRefresh()" title="Refresh">↻</button>
+
+<nav class="top">
+  <a href="/" class="logo">
+    <span class="logo-mark">F</span>
+    <span>FlowMap</span>
+  </a>
+  <div class="navlinks">
+    <a href="/"        {% if request.url.path == "/"        %}class="active"{% endif %} data-i18n="nav.dashboard">Dashboard</a>
+    <a href="/sectors" {% if request.url.path == "/sectors" %}class="active"{% endif %} data-i18n="nav.sectors">Sectors</a>
+    <a href="/fear"    {% if request.url.path == "/fear"    %}class="active"{% endif %} data-i18n="nav.fear">Fear &amp; Correlation</a>
+    <a href="/history" {% if request.url.path == "/history" %}class="active"{% endif %} data-i18n="nav.history">History</a>
   </div>
-  <button id="lang-toggle" onclick="toggleLang()">한국어</button>
+  <div class="nav-right">
+    <button class="live-pill" id="live-pill" onclick="manualRefresh()" title="Refresh">
+      <span class="dot" id="status-dot"></span>
+      <span data-i18n="refresh.updated">Updated</span>
+      <span id="updated-time">—</span>
+    </button>
+    <button class="lang-btn" id="lang-toggle" onclick="toggleLang()">한국어</button>
+  </div>
 </nav>
+
 <div class="container">
   {% block content %}{% endblock %}
 </div>
+
+<!-- ── Shared static JS ─────────────────────────────────── -->
+<script src="/static/js/glossary.js"></script>
+<script src="/static/js/anomaly.js"></script>
+
 <script>
-  document.querySelectorAll('nav a').forEach(a => {
+  // ── Nav active link ──────────────────────────────────────
+  document.querySelectorAll('.navlinks a').forEach(a => {
     if (a.getAttribute('href') === window.location.pathname) a.classList.add('active');
   });
   applyLang();
 
-  // ── Auto-refresh & last-updated ──────────────────────────────
-  const AUTO_REFRESH_MS = 5 * 60 * 1000;  // 5 minutes
+  // ── Refresh / live-pill freshness ────────────────────────
+  const AUTO_REFRESH_MS = 5 * 60 * 1000;
   let lastRefreshAt = null;
 
   function markUpdated() {
     lastRefreshAt = new Date();
     _renderUpdatedTime();
-    const dot = document.getElementById('status-dot');
-    if (dot) { dot.classList.add('live'); }
+    const pill = document.getElementById('live-pill');
+    if (pill) { pill.classList.remove('stale', 'very-stale'); }
   }
 
   function _renderUpdatedTime() {
@@ -150,28 +392,24 @@
     el.textContent = diffMin === 0
       ? t('refresh.just_now')
       : diffMin + ' ' + t('refresh.min_ago');
+    const pill = document.getElementById('live-pill');
+    if (pill && diffMin >= 30) { pill.classList.add('very-stale'); }
+    else if (pill && diffMin >= 10) { pill.classList.add('stale'); }
   }
 
-  // Keep "X min ago" text ticking every minute
   setInterval(_renderUpdatedTime, 60000);
-
-  // Update "X min ago" label text when language changes
   document.addEventListener('langchange', _renderUpdatedTime);
 
   function manualRefresh() {
-    const btn = document.getElementById('refresh-btn');
-    if (btn) { btn.classList.add('spinning'); setTimeout(() => btn.classList.remove('spinning'), 600); }
     if (window.pageReload) { window.pageReload(); markUpdated(); }
+    else { location.reload(); }
   }
 
-  // Auto-refresh timer — starts when pageReload is registered
-  function startAutoRefresh() {
-    setInterval(() => {
-      if (window.pageReload) { window.pageReload(); markUpdated(); }
-    }, AUTO_REFRESH_MS);
-  }
-  startAutoRefresh();
+  setInterval(() => {
+    if (window.pageReload) { window.pageReload(); markUpdated(); }
+  }, AUTO_REFRESH_MS);
 </script>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>

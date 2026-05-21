@@ -23,12 +23,18 @@ def index(request: Request):
 
 @router.get("/sectors", response_class=HTMLResponse)
 def sectors_page(request: Request):
-    return templates.TemplateResponse(request=request, name="sectors.html", context={})
+    summary = sector_heatmap.get_sector_summary()
+    return templates.TemplateResponse(request=request, name="sectors.html", context={
+        "summary": summary,
+    })
 
 
 @router.get("/fear", response_class=HTMLResponse)
 def fear_page(request: Request):
-    return templates.TemplateResponse(request=request, name="fear.html", context={})
+    fear = _get_fear_cards()
+    return templates.TemplateResponse(request=request, name="fear.html", context={
+        "fear": fear,
+    })
 
 
 @router.get("/history", response_class=HTMLResponse)

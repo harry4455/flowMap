@@ -1,132 +1,136 @@
 {% extends "base.html" %}
 {% block title %}FlowMap — History{% endblock %}
 
+{% block head_styles %}
+  .h-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+  .h-stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+  .h-stat .lbl { font-size:10px; text-transform:uppercase; letter-spacing:0.10em; color:var(--muted); }
+  .h-stat .val { font-family:var(--mono); font-size:22px; font-weight:500; margin-top:6px; letter-spacing:-0.01em; }
+  .h-stat .sub { font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:4px; }
+  .vix-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:16px; }
+  .vix-card .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:16px; flex-wrap:wrap; }
+  .vix-card .head h3 { font-size:15px; font-weight:600; white-space:nowrap; }
+  .vix-card .head .sub { font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .vix-card .zone-legend { display:flex; gap:14px; font-family:var(--mono); font-size:10px; flex-wrap:wrap; }
+  .vix-card .zone-legend span { display:inline-flex; align-items:center; gap:6px; color:var(--muted); }
+  .vix-card .zone-legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; }
+  .vix-card .zone-legend .calm::before    { background:oklch(0.55 0.10 155/.6); }
+  .vix-card .zone-legend .elevated::before{ background:oklch(0.65 0.12 75/.6); }
+  .vix-card .zone-legend .panic::before   { background:oklch(0.62 0.16 25/.6); }
+  #vix-chart { height:360px; }
+  .hist-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .hist-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+  .hist-card .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; }
+  .hist-card h4 { font-size:14px; font-weight:600; }
+  .hist-card .sub { font-size:11px; color:var(--muted); font-family:var(--mono); margin-top:2px; }
+  .hist-card .last { font-family:var(--mono); font-size:11px; color:var(--text-2); }
+  .hist-chart { height:220px; margin-top:14px; }
+  @media (max-width:900px) { .h-stats { grid-template-columns:repeat(2,1fr); } .hist-grid { grid-template-columns:1fr; } }
+{% endblock %}
+
 {% block content %}
-<div class="section-header">
-  <span class="section-title" data-i18n="history.page_title">Market Temperature History</span>
-  <span class="muted" style="font-size:12px;" data-i18n="history.subtitle">VIX · VVIX · SKEW over time</span>
-</div>
-
-<div class="chart-controls" style="margin-bottom:12px;">
-  <button class="btn active" data-days="90">3M</button>
-  <button class="btn" data-days="180">6M</button>
-  <button class="btn" data-days="365">1Y</button>
-</div>
-
-<div class="card" style="margin-bottom:16px;">
-  <div class="card-title" data-i18n="history.vix_title">VIX History</div>
-  <div id="vix-error" style="display:none;color:#ef5350;padding:8px;font-size:12px;"></div>
-  <div id="vix-chart" style="height:260px;"></div>
-</div>
-
-<div class="grid-2">
-  <div class="card">
-    <div class="card-title" data-i18n="history.vvix_title">VVIX (Volatility of VIX)</div>
-    <div id="vvix-chart" style="height:200px;"></div>
+<div class="page-head">
+  <div>
+    <h1 data-i18n="history.page_title">Market Temperature History</h1>
+    <div class="subtitle" data-i18n="history.subtitle">VIX · VVIX · SKEW over time — regime context</div>
   </div>
-  <div class="card">
-    <div class="card-title" data-i18n="history.skew_title">SKEW Index</div>
-    <div id="skew-chart" style="height:200px;"></div>
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div class="ts-row">
+      <div class="big-time" id="page-time">—</div>
+    </div>
+    <div class="segmented" id="period-tabs">
+      <button data-d="90" class="active">3M</button>
+      <button data-d="180">6M</button>
+      <button data-d="365">1Y</button>
+    </div>
+  </div>
+</div>
+
+{# Stat strip — updated dynamically by JS after chart data loads #}
+<div class="h-stats">
+  <div class="h-stat">
+    <div class="lbl" data-i18n="history.vix_current">VIX · Current</div>
+    <div class="val num" id="stat-vix-cur">—</div>
+    <div class="sub" id="stat-vix-chg" class="muted">—</div>
+  </div>
+  <div class="h-stat">
+    <div class="lbl" id="stat-avg-lbl" data-i18n="history.vix_avg">VIX · 3M Avg</div>
+    <div class="val num" id="stat-vix-avg">—</div>
+    <div class="sub" id="stat-vix-range">—</div>
+  </div>
+  <div class="h-stat">
+    <div class="lbl" data-i18n="history.days_above">Days VIX &gt; 20</div>
+    <div class="val num" id="stat-vix-days">—</div>
+    <div class="sub" id="stat-vix-pct">—</div>
+  </div>
+  <div class="h-stat">
+    <div class="lbl" data-i18n="history.regime">Regime</div>
+    <div class="val" id="stat-regime">—</div>
+    <div class="sub" id="stat-regime-sub">—</div>
+  </div>
+</div>
+
+{# VIX big chart #}
+<div class="vix-card">
+  <div class="head">
+    <div>
+      <h3><span data-term="vix" data-i18n="history.vix_title">VIX History</span></h3>
+      <div class="sub" data-i18n="history.vix_sub">Reference lines at 20 · 30</div>
+    </div>
+    <div class="zone-legend">
+      <span class="calm" data-i18n="history.calm">≤20 Calm</span>
+      <span class="elevated" data-i18n="history.elevated">20–30 Elevated</span>
+      <span class="panic" data-i18n="history.stress">&gt;30 Stress</span>
+    </div>
+  </div>
+  <div id="vix-error" style="display:none;color:var(--down);padding:8px;font-size:12px;"></div>
+  <div id="vix-chart"></div>
+</div>
+
+{# VVIX / SKEW grid #}
+<div class="hist-grid">
+  <div class="hist-card">
+    <div class="head">
+      <div>
+        <h4><span data-term="vvix" data-i18n="history.vvix_title">VVIX</span></h4>
+        <div class="sub" data-i18n="history.vvix_sub">Volatility of VIX</div>
+      </div>
+      <div class="last" data-i18n="history.last">last <span class="num neutral" id="last-vvix">—</span></div>
+    </div>
+    <div id="vvix-chart" class="hist-chart"></div>
+  </div>
+  <div class="hist-card">
+    <div class="head">
+      <div>
+        <h4><span data-term="skew" data-i18n="history.skew_title">SKEW</span></h4>
+        <div class="sub" data-i18n="history.skew_sub">Tail-risk premium</div>
+      </div>
+      <div class="last" data-i18n="history.last">last <span class="num neutral" id="last-skew">—</span></div>
+    </div>
+    <div id="skew-chart" class="hist-chart"></div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="/static/js/charts-common.js"></script>
+<script src="/static/js/history-page.js"></script>
 <script>
-function showError(id, msg) {
-  const el = document.getElementById(id);
-  if (el) { el.style.display = 'block'; el.textContent = '⚠ ' + msg; }
-}
-
-let vixChart = null, vvixChart = null, skewChart = null;
-try {
-  vixChart  = echarts.init(document.getElementById('vix-chart'),  'dark');
-  vvixChart = echarts.init(document.getElementById('vvix-chart'), 'dark');
-  skewChart = echarts.init(document.getElementById('skew-chart'), 'dark');
-  ['vix-chart','vvix-chart','skew-chart'].forEach(id =>
-    document.getElementById(id).style.background = 'transparent'
-  );
-} catch(e) { showError('vix-error', 'Chart init failed: ' + e.message); }
-
-let lastData = {};  // { VIX: {...}, VVIX: {...}, SKEW: {...} }
-let currentDays = 90;
-
-function lineOption(d, color, markLines) {
-  return {
-    backgroundColor: 'transparent',
-    tooltip: { trigger:'axis', axisPointer:{ type:'cross' } },
-    grid: { top:20, right:20, bottom:40, left:55 },
-    xAxis: {
-      type:'category', data: d.dates,
-      axisLabel: { color:'#8a8fa8', fontSize:10, formatter: v => v.slice(5) }
-    },
-    yAxis: {
-      type:'value', axisLabel:{ color:'#8a8fa8', fontSize:10 },
-      splitLine:{ lineStyle:{ color:'#2a2d3a' } }
-    },
-    series: [{
-      type:'line', data: d.values, smooth:false, symbol:'none',
-      lineStyle:{ width:1.5, color },
-      areaStyle:{ color: new echarts.graphic.LinearGradient(0,0,0,1,[
-        { offset:0, color: color + '40' },
-        { offset:1, color: color + '00' },
-      ])},
-      markLine: markLines.length ? {
-        silent:true, lineStyle:{ type:'dashed', color:'#555' },
-        label:{ position:'end', color:'#888', fontSize:10 },
-        data: markLines.map(v => ({ yAxis:v, name: String(v) }))
-      } : undefined,
-    }],
-  };
-}
-
-async function loadChart(chart, symbol, days, color, markLines, errorId) {
-  if (!chart) return;
-  chart.showLoading({ text: t('common.loading'), maskColor:'rgba(0,0,0,0.4)', textColor:'#aaa' });
-  try {
-    const res = await fetch('/api/fear/timeseries/' + symbol + '?window=' + days);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const d = await res.json();
-    lastData[symbol] = d;
-    chart.hideLoading();
-    if (!d.dates?.length) {
-      chart.setOption({ title:{ text: t('common.nodata'), left:'center', top:'center', textStyle:{ color:'#888' } } });
-      return;
-    }
-    chart.setOption(lineOption(d, color, markLines), true);
-  } catch(e) {
-    chart && chart.hideLoading();
-    if (errorId) showError(errorId, e.message);
-  }
-}
-
-function loadAll(days) {
-  loadChart(vixChart,  'VIX',  days, '#ef5350', [20, 30],   'vix-error');
-  loadChart(vvixChart, 'VVIX', days, '#ab47bc', [],         null);
-  loadChart(skewChart, 'SKEW', days, '#29b6f6', [130, 150], null);
-}
-
-document.querySelectorAll('[data-days]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-days]').forEach(b => b.classList.remove('active'));
+  let currentDays = 90;
+  document.getElementById('period-tabs').addEventListener('click', e => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    document.querySelectorAll('#period-tabs button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentDays = +btn.dataset.days;
-    loadAll(currentDays);
+    currentDays = +btn.dataset.d;
+    loadHistory(currentDays);
   });
-});
-
-// Language change: chart options are language-independent (numbers/dates only), just update labels
-document.addEventListener('langchange', () => {
-  // card-title elements have data-i18n, already handled by applyLang()
-  // charts don't have translatable text, no re-render needed
-});
-
-window.addEventListener('resize', () =>
-  [vixChart, vvixChart, skewChart].forEach(c => c && c.resize())
-);
-
-window.pageReload = () => loadAll(currentDays);
-window.pageReload();
-markUpdated();
+  loadHistory(currentDays);
+  markUpdated();
+  window.pageReload = () => loadHistory(currentDays);
+  const now = new Date();
+  document.getElementById('page-time').textContent =
+    now.toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}) + ' · ' +
+    now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
 </script>
 {% endblock %}

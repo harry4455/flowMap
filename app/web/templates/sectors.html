@@ -1,159 +1,172 @@
 {% extends "base.html" %}
 {% block title %}FlowMap — Sector Flows{% endblock %}
 
+{% block head_styles %}
+  .stat-strip { display: grid; grid-template-columns: repeat(3,1fr); gap:12px; margin-bottom:16px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; display:grid; grid-template-columns:1fr auto; gap:6px 16px; align-items:center; }
+  .stat-card .label { grid-column:1/-1; font-size:10px; text-transform:uppercase; letter-spacing:0.10em; color:var(--muted); }
+  .stat-card .name { font-size:17px; font-weight:600; letter-spacing:-0.01em; }
+  .stat-card .tk { font-family:var(--mono); font-size:11px; color:var(--muted); margin-left:6px; }
+  .stat-card .ret { font-family:var(--mono); font-size:22px; font-weight:500; text-align:right; }
+  .stat-card .meta { grid-column:1/-1; color:var(--muted); font-size:11px; font-family:var(--mono); }
+  .breadth-gauge { grid-column:1/-1; display:flex; gap:3px; margin-top:4px; }
+  .breadth-gauge span { flex:1; height:6px; border-radius:2px; background:var(--border); }
+  .breadth-gauge span.on { background:var(--up); }
+  .breadth-gauge span.dn { background:var(--down); }
+  .heat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:16px; }
+  .heat-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:16px; flex-wrap:wrap; }
+  .heat-head h3 { font-size:15px; font-weight:600; letter-spacing:-0.005em; }
+  .heat-head .sub { font-size:11px; color:var(--muted); font-family:var(--mono); margin-top:4px; }
+  #sectors-heatmap { height:420px; }
+  .summary-list { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .summary-list .grid-tmpl {
+    display:grid;
+    grid-template-columns: 28px minmax(0,1.4fr) minmax(0,.8fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1.3fr) minmax(0,1fr);
+    gap:12px; padding:11px 18px; align-items:center;
+  }
+  .summary-list .head { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.10em; background:var(--bg-deep); border-bottom:1px solid var(--border); padding-top:10px; padding-bottom:10px; }
+  .summary-list .row { border-bottom:1px solid var(--border); font-size:13px; cursor:pointer; transition:background .12s; }
+  .summary-list .row:last-child { border-bottom:none; }
+  .summary-list .row:hover { background:var(--surface-2); }
+  .summary-list .ticker-chip { width:28px; height:28px; display:grid; place-items:center; background:var(--bg-deep); border:1px solid var(--border); border-radius:6px; font-family:var(--mono); font-size:10px; font-weight:600; color:var(--text-2); }
+  .summary-list .name-cell { font-weight:500; }
+  .summary-list .name-cell .tk { font-family:var(--mono); font-size:10px; color:var(--muted); margin-left:6px; }
+  .summary-list .num-cell { font-family:var(--mono); text-align:right; font-variant-numeric:tabular-nums; }
+  .summary-list .spark-cell { height:28px; }
+  .summary-list .flow-cell { display:flex; align-items:center; gap:10px; }
+  .summary-list .flow-bar { flex:1; height:4px; background:var(--border); border-radius:2px; position:relative; overflow:visible; }
+  .summary-list .flow-bar .center { position:absolute; top:-2px; bottom:-2px; left:50%; width:1px; background:var(--border-strong); }
+  .summary-list .flow-bar .fill { position:absolute; top:0; bottom:0; border-radius:2px; }
+  .summary-list .flow-bar .fill.pos { left:50%; background:var(--up); }
+  .summary-list .flow-bar .fill.neg { right:50%; background:var(--down); }
+  .summary-list .flow-val { font-family:var(--mono); font-size:11px; width:60px; text-align:right; }
+  @media (max-width:900px) { .stat-strip { grid-template-columns:1fr; } }
+{% endblock %}
+
 {% block content %}
-<div class="section-header">
-  <span class="section-title" data-i18n="sectors.page_title">Sector Heatmap</span>
-  <span class="muted" style="font-size:12px;" data-i18n="sectors.subtitle">Daily returns by sector</span>
+<script>
+  const SERVER_SECTORS = {{ summary | tojson if summary is defined else '[]' | safe }};
+</script>
+
+<div class="page-head">
+  <div>
+    <h1 data-i18n="sectors.page_title">Sector Flows</h1>
+    <div class="subtitle" data-i18n="sectors.subtitle">Daily returns · estimated flows</div>
+  </div>
+  <div class="ts-row">
+    <div class="big-time" id="page-time">—</div>
+    <div data-i18n="sectors.settle">Flows settle 15:00 ET</div>
+  </div>
 </div>
 
-<div class="card" style="margin-bottom:16px;">
-  <div class="chart-controls">
-    <span class="muted" style="font-size:12px; margin-right:4px;" data-i18n="sectors.period">Period:</span>
-    <button class="btn" data-period="1D">1D</button>
-    <button class="btn" data-period="5D">5D</button>
-    <button class="btn active" data-period="1M">1M</button>
-    <button class="btn" data-period="3M">3M</button>
-    <button class="btn" data-period="YTD">YTD</button>
+{# Stat strip #}
+{% if summary %}
+{% set leader  = summary | sort(attribute='ret_1m', reverse=true)  | first %}
+{% set laggard = summary | sort(attribute='ret_1m')                 | first %}
+{% set n_above = summary | selectattr('ret_1m', 'gt', 0) | list | length %}
+<div class="stat-strip">
+  <div class="stat-card" data-anomaly-target="up">
+    <div class="label" data-i18n="sectors.leader">Leader · 1M</div>
+    <div class="name">{{ leader.name }}<span class="tk">{{ leader.ticker }}</span></div>
+    <div class="ret up">{{ "%+.2f%%"|format(leader.ret_1m) }}</div>
+    <div class="meta">${{ "%.2f"|format(leader.close) if leader.close else "—" }} · {{ "%+.1f M"|format(leader.flow_m) if leader.flow_m else "—" }} flow</div>
   </div>
-  <div id="heatmap-error" style="display:none;color:#ef5350;padding:8px;font-size:12px;"></div>
-  <div id="heatmap" style="height:420px;"></div>
+  <div class="stat-card" data-anomaly-target="down">
+    <div class="label" data-i18n="sectors.laggard">Laggard · 1M</div>
+    <div class="name">{{ laggard.name }}<span class="tk">{{ laggard.ticker }}</span></div>
+    <div class="ret down">{{ "%+.2f%%"|format(laggard.ret_1m) }}</div>
+    <div class="meta">${{ "%.2f"|format(laggard.close) if laggard.close else "—" }} · {{ "%+.1f M"|format(laggard.flow_m) if laggard.flow_m else "—" }} flow</div>
+  </div>
+  <div class="stat-card">
+    <div class="label"><span data-term="breadth" data-i18n="sectors.breadth">Breadth · above 50D MA</span></div>
+    <div class="name num">{{ n_above }}<span style="color:var(--muted);font-weight:400;"> / {{ summary|length }}</span></div>
+    <div class="ret" style="font-size:18px;color:var(--text-2);">{{ ((n_above / summary|length) * 100) | round | int }}%</div>
+    <div class="breadth-gauge" id="breadth-gauge">
+      {% for s in summary %}
+        <span class="{{ 'on' if s.ret_1m and s.ret_1m > 0 else ('dn' if s.ret_1m and s.ret_1m < -1.5 else '') }}" title="{{ s.ticker }}"></span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="empty-state card" style="margin-bottom:16px;">
+  <div class="glyph">⏳</div>
+  <div class="ttl" data-i18n="empty.waiting_title">Waiting for data</div>
+  <div class="desc" data-i18n="empty.waiting_desc">Run <code>fetch</code> to populate this panel.</div>
+</div>
+{% endif %}
+
+{# Heatmap #}
+<div class="heat-card">
+  <div class="heat-head">
+    <div>
+      <h3 data-i18n="sectors.page_title">Returns by Sector</h3>
+      <div class="sub" data-i18n="sectors.subtitle">Color intensity = daily % return · scale ±3%</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--muted);">
+        <span>−3%</span>
+        <span style="display:inline-flex;border-radius:3px;overflow:hidden;">
+          <div style="width:16px;height:10px;background:#d44a4a;"></div>
+          <div style="width:16px;height:10px;background:#8b3a3a;"></div>
+          <div style="width:16px;height:10px;background:#3a2d2d;"></div>
+          <div style="width:16px;height:10px;background:#2d3a33;"></div>
+          <div style="width:16px;height:10px;background:#5a9a78;"></div>
+          <div style="width:16px;height:10px;background:#6dc28a;"></div>
+        </span>
+        <span>+3%</span>
+      </div>
+      <div class="segmented" id="period-tabs">
+        <button data-period="1D">1D</button>
+        <button data-period="5D">5D</button>
+        <button data-period="1M" class="active">1M</button>
+        <button data-period="3M">3M</button>
+        <button data-period="YTD">YTD</button>
+      </div>
+    </div>
+  </div>
+  <div id="sectors-heatmap"></div>
 </div>
 
-<div class="card">
-  <div class="section-header">
-    <span class="section-title" data-i18n="sectors.summary">Sector Summary</span>
+{# Summary table #}
+<div class="section-bar">
+  <h2 data-i18n="sectors.summary">Sector Summary</h2>
+  <div class="meta" data-i18n="sectors.sorted">Sorted by 1M return</div>
+</div>
+<div class="summary-list">
+  <div class="grid-tmpl head">
+    <span></span>
+    <span data-i18n="th.sector">Sector</span>
+    <span data-i18n="th.close">Close</span>
+    <span data-i18n="th.1d">1D</span>
+    <span data-i18n="th.5d">5D</span>
+    <span data-i18n="th.1m">1M</span>
+    <span data-i18n="heatmap.title">20D Trend</span>
+    <span data-i18n="th.flow">Flow (est.)</span>
   </div>
-  <div id="summary-table"><div class="spinner"></div></div>
+  <div id="summary-rows"></div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="/static/js/charts-common.js"></script>
+<script src="/static/js/sectors-page.js"></script>
 <script>
-let heatChart = null;
-let currentPeriod = '1M';
-let lastHeatmapData = null;
-
-function showError(id, msg) {
-  const el = document.getElementById(id);
-  if (el) { el.style.display = 'block'; el.textContent = '⚠ ' + msg; }
-}
-
-try {
-  heatChart = echarts.init(document.getElementById('heatmap'), 'dark');
-  document.getElementById('heatmap').style.background = 'transparent';
-} catch(e) {
-  showError('heatmap-error', 'Chart init failed: ' + e.message);
-}
-
-function renderHeatmap(d) {
-  if (!heatChart || !d) return;
-  if (!d.dates || d.dates.length === 0) {
-    heatChart.setOption({ title: { text: t('common.nodata'), left:'center', top:'center', textStyle:{ color:'#888', fontSize:14 } } });
-    return;
-  }
-  heatChart.setOption({
-    backgroundColor: 'transparent',
-    tooltip: {
-      formatter: p => {
-        const [di, si, val] = p.data;
-        return `<b>${d.sectors[si]}</b> — ${sectorName(d.sectors[si])}<br/>${d.dates[di]}<br/><b style="color:${val>0?'#26a69a':'#ef5350'}">${val>0?'+':''}${val}%</b>`;
-      }
-    },
-    grid: { top: 10, right: 120, bottom: 60, left: 180 },
-    xAxis: {
-      type: 'category', data: d.dates,
-      axisLabel: { color:'#8a8fa8', fontSize:10, formatter: v => v.slice(5), interval: Math.max(0, Math.floor(d.dates.length / 8) - 1) },
-      splitLine: { show: false },
-    },
-    yAxis: {
-      type: 'category',
-      data: d.sectors.map(ticker => ticker + '  ' + sectorName(ticker)),
-      axisLabel: { color:'#e0e0e0', fontSize:12 },
-      splitLine: { show: false },
-    },
-    visualMap: {
-      min: -3, max: 3, calculable: true, orient: 'vertical', right: 10, top: 'center',
-      textStyle: { color:'#8a8fa8' },
-      inRange: { color: ['#d32f2f', '#263238', '#26a69a'] },
-    },
-    series: [{ type:'heatmap', data: d.data, emphasis: { itemStyle: { shadowBlur: 6 } } }],
-  }, true);
-}
-
-async function loadHeatmap(period) {
-  if (!heatChart) return;
-  heatChart.showLoading({ text: t('common.loading'), maskColor:'rgba(0,0,0,0.4)', textColor:'#aaa' });
-  try {
-    const res = await fetch('/api/sectors/heatmap?period=' + period);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    lastHeatmapData = await res.json();
-    heatChart.hideLoading();
-    renderHeatmap(lastHeatmapData);
-  } catch(e) {
-    heatChart && heatChart.hideLoading();
-    showError('heatmap-error', e.message);
-  }
-}
-
-function renderSummaryTable(rows) {
-  const el = document.getElementById('summary-table');
-  if (!rows.length) { el.innerHTML = '<p class="muted" style="padding:16px;">' + t('common.nodata') + '</p>'; return; }
-
-  const color = v => v == null ? '' : v > 0 ? 'up' : v < 0 ? 'down' : '';
-  const fmt   = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
-  const fmtF  = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + ' M';
-
-  el.innerHTML = `<table>
-    <thead><tr>
-      <th>${t('th.sector')}</th><th>${t('th.etf')}</th><th>${t('th.close')}</th>
-      <th>${t('th.1d')}</th><th>${t('th.5d')}</th><th>${t('th.1m')}</th><th>${t('th.flow')}</th>
-    </tr></thead>
-    <tbody>${rows.map(s => `
-      <tr>
-        <td>${sectorName(s.ticker)}</td>
-        <td><span class="muted">${s.ticker}</span></td>
-        <td>${s.close ? '$' + s.close.toFixed(2) : '—'}</td>
-        <td class="${color(s.ret_1d)}">${fmt(s.ret_1d)}</td>
-        <td class="${color(s.ret_5d)}">${fmt(s.ret_5d)}</td>
-        <td class="${color(s.ret_1m)}">${fmt(s.ret_1m)}</td>
-        <td class="${color(s.flow_m)}">${fmtF(s.flow_m)}</td>
-      </tr>`).join('')}
-    </tbody></table>`;
-}
-
-let lastSummaryData = null;
-async function loadSummary() {
-  try {
-    const res = await fetch('/api/sectors/summary');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    lastSummaryData = await res.json();
-    renderSummaryTable(lastSummaryData);
-  } catch(e) {
-    document.getElementById('summary-table').innerHTML =
-      '<p style="color:#ef5350;padding:16px;">' + t('common.error') + ': ' + e.message + '</p>';
-  }
-}
-
-document.querySelectorAll('[data-period]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
+  // Pass server data to sectors-page.js
+  initSectorsPage(SERVER_SECTORS);
+  if (typeof initAnomalies === 'function') initAnomalies(SERVER_SECTORS, []);
+  markUpdated();
+  window.pageReload = () => { location.reload(); };
+  document.getElementById('period-tabs').addEventListener('click', e => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    document.querySelectorAll('#period-tabs button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentPeriod = btn.dataset.period;
-    loadHeatmap(currentPeriod);
   });
-});
-
-// On language change: re-render cached data with new translations (no extra fetch)
-document.addEventListener('langchange', () => {
-  if (lastHeatmapData) renderHeatmap(lastHeatmapData);
-  if (lastSummaryData) renderSummaryTable(lastSummaryData);
-});
-
-window.addEventListener('resize', () => heatChart && heatChart.resize());
-
-window.pageReload = () => { loadHeatmap(currentPeriod); loadSummary(); };
-window.pageReload();
-markUpdated();
+  // Set current time
+  const now = new Date();
+  document.getElementById('page-time').textContent =
+    now.toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}) + ' · ' +
+    now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
 </script>
 {% endblock %}
