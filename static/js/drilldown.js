@@ -112,14 +112,16 @@ function _renderDrillChart(drillEl, ticker, sectors) {
     dates.push(d.toISOString().slice(5,10)); values.push(+v.toFixed(2));
   }
   const chart = echarts.init(el);
-  const stroke = ret > 0 ? 'oklch(0.74 0.14 155)' : 'oklch(0.67 0.18 25)';
+  const stroke    = ret > 0 ? T.up : T.down;
+  const strokeDim = ret > 0 ? T.upDim : T.downDim;
+  const strokeFade = ret > 0 ? T.upFade : T.downFade;
   chart.setOption({
     backgroundColor:'transparent',
     tooltip:{trigger:'axis',backgroundColor:'#1a1d27',borderColor:'#2a2d3a',textStyle:{color:'#e0e0e0',fontFamily:'JetBrains Mono, monospace',fontSize:11},formatter:p=>`${p[0].axisValue}<br/><b>$${p[0].value}</b>`},
     grid:{top:8,right:8,bottom:24,left:44},
     xAxis:{type:'category',data:dates,axisLine:{lineStyle:{color:'#2a2d3a'}},axisTick:{show:false},axisLabel:{color:'#8a8fa8',fontSize:9,fontFamily:'JetBrains Mono,monospace',interval:Math.floor(days/6)},splitLine:{show:false}},
     yAxis:{type:'value',scale:true,axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#8a8fa8',fontSize:9,fontFamily:'JetBrains Mono,monospace'},splitLine:{lineStyle:{color:'#2a2d3a',type:'dashed',opacity:.4}}},
-    series:[{type:'line',data:values,smooth:false,symbol:'none',lineStyle:{width:1.5,color:stroke},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:stroke.replace(')','/0.22)')},{offset:1,color:stroke.replace(')','/0)')}])}}],
+    series:[{type:'line',data:values,smooth:false,symbol:'none',lineStyle:{width:1.5,color:stroke},areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:strokeDim},{offset:1,color:strokeFade}])}}],
   });
 }
 

@@ -3,12 +3,12 @@
 // and renders the History page charts.
 
 function loadHistory(days) {
-  _loadChart('VIX',  days, 'oklch(0.78 0.13 35)', [20,30], 'vix-chart',  'vix-error', true);
-  _loadChart('VVIX', days, 'oklch(0.70 0.16 305)', [],     'vvix-chart', null,        false);
-  _loadChart('SKEW', days, 'oklch(0.72 0.13 220)', [130,150], 'skew-chart', null,     false);
+  _loadChart('VIX',  days, '#e8924e', 'rgba(232,146,78,0.22)', 'rgba(232,146,78,0)',    [20,30], 'vix-chart',  'vix-error', true);
+  _loadChart('VVIX', days, '#b87fd4', 'rgba(184,127,212,0.22)', 'rgba(184,127,212,0)',  [],      'vvix-chart', null,        false);
+  _loadChart('SKEW', days, '#5a9fd4', 'rgba(90,159,212,0.22)',  'rgba(90,159,212,0)',   [130,150], 'skew-chart', null,      false);
 }
 
-function _loadChart(symbol, days, color, markLines, chartId, errorId, updateStats) {
+function _loadChart(symbol, days, color, colorDim, colorFade, markLines, chartId, errorId, updateStats) {
   const el = document.getElementById(chartId); if (!el) return;
   fetch(`/api/fear/timeseries/${symbol}?window=${days}`)
     .then(r => r.json())
@@ -32,11 +32,11 @@ function _loadChart(symbol, days, color, markLines, chartId, errorId, updateStat
         series:[{type:'line',data:d.values,smooth:false,symbol:'none',
           lineStyle:{width:1.8,color},
           areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[
-            {offset:0,color:color.replace(')','/0.22)')},{offset:1,color:color.replace(')','/0)')}
+            {offset:0,color:colorDim},{offset:1,color:colorFade}
           ])},
           markArea: symbol === 'VIX' ? {silent:true,itemStyle:{opacity:.18},data:[
-            [{yAxis:20,itemStyle:{color:'oklch(0.65 0.12 75)'}},{yAxis:30}],
-            [{yAxis:30,itemStyle:{color:'oklch(0.62 0.16 25)'}},{yAxis:100}],
+            [{yAxis:20,itemStyle:{color:'#e3a447'}},{yAxis:30}],
+            [{yAxis:30,itemStyle:{color:'#d44a4a'}},{yAxis:100}],
           ]} : undefined,
           markLine: markLines.length ? {silent:true,symbol:'none',
             lineStyle:{type:'dashed',color:T.muted,opacity:.6},

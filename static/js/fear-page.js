@@ -59,10 +59,10 @@ function loadSpread(w) {
         },
         series: [{
           type: 'line', data: d.values, smooth: false, symbol: 'none',
-          lineStyle: { width: 1.6, color: 'oklch(0.74 0.14 155)' },
+          lineStyle: { width: 1.6, color: T.up },
           areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'oklch(0.74 0.14 155 / 0.22)' },
-            { offset: 1, color: 'oklch(0.74 0.14 155 / 0)' },
+            { offset: 0, color: T.upDim },
+            { offset: 1, color: T.upFade },
           ])},
           markLine: {
             silent: true, symbol: 'none',
@@ -136,7 +136,9 @@ function loadTs(sym, w) {
       const chart = el._chart || echarts.init(el);
       el._chart = chart;
       const isFear = ['VIX','VVIX','SKEW','PUT_CALL'].includes(sym);
-      const stroke = isFear ? 'oklch(0.78 0.13 35)' : 'oklch(0.72 0.13 220)';
+      const stroke   = isFear ? '#e8924e' : '#5a9fd4';
+      const strokeDim  = isFear ? T.fearDim  : T.blueDim;
+      const strokeFade = isFear ? T.fearFade : T.blueFade;
       chart.setOption({
         backgroundColor: 'transparent',
         tooltip: {
@@ -151,8 +153,8 @@ function loadTs(sym, w) {
           type: 'line', data: d.values, smooth: false, symbol: 'none',
           lineStyle: { width: 1.6, color: stroke },
           areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: stroke.replace(')', ' / 0.22)') },
-            { offset: 1, color: stroke.replace(')', ' / 0)') },
+            { offset: 0, color: strokeDim },
+            { offset: 1, color: strokeFade },
           ])},
         }],
       }, true);
@@ -177,7 +179,8 @@ function initFearPage(fear) {
         r = (r*9301+49297)%233280; v += (r/233280-.5)*(v*0.02); return +v.toFixed(2);
       });
       const down = (f.change || 0) < 0;
-      const stroke = down ? 'oklch(0.74 0.14 155)' : 'oklch(0.67 0.18 25)';
+      const stroke    = down ? T.up : T.down;
+      const strokeDim = down ? 'rgba(109, 194, 138, 0.28)' : 'rgba(212, 74, 74, 0.28)';
       chart.setOption({
         grid: { top:0, right:0, bottom:0, left:0 },
         xAxis: { type:'category', show:false, data:data.map((_,x)=>x) },
@@ -185,8 +188,8 @@ function initFearPage(fear) {
         series: [{ type:'line', data, smooth:true, symbol:'none',
           lineStyle: { width:1.4, color:stroke },
           areaStyle: { color:new echarts.graphic.LinearGradient(0,0,0,1,[
-            {offset:0, color:stroke.replace(')','/0.28)')},
-            {offset:1, color:stroke.replace(')','/0)')}
+            {offset:0, color:strokeDim},
+            {offset:1, color: down ? T.upFade : T.downFade}
           ])},
         }],
       }, true);

@@ -51,7 +51,9 @@ function initSectorsPage(sectors) {
         return +v.toFixed(2);
       });
       const upTrend = (s.ret_1m || 0) > 0;
-      const stroke = upTrend ? 'oklch(0.74 0.14 155)' : 'oklch(0.67 0.18 25)';
+      const stroke    = upTrend ? T.up : T.down;
+      const strokeDim = upTrend ? T.upDim : T.downDim;
+      const strokeFade = upTrend ? T.upFade : T.downFade;
       chart.setOption({
         grid: { top:2, right:2, bottom:2, left:2 },
         xAxis: { type:'category', show:false, data: data.map((_,x)=>x) },
@@ -59,8 +61,8 @@ function initSectorsPage(sectors) {
         series: [{ type:'line', data, smooth:true, symbol:'none',
           lineStyle: { width:1.4, color: stroke },
           areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[
-            { offset:0, color: stroke.replace(')', ' / 0.22)') },
-            { offset:1, color: stroke.replace(')', ' / 0)') },
+            { offset:0, color: strokeDim },
+            { offset:1, color: strokeFade },
           ])},
         }],
       });
