@@ -116,6 +116,25 @@
     .fear-grid { grid-template-columns: repeat(2, 1fr); }
     .temp-body { grid-template-columns: 1fr; }
   }
+
+  .guide-section { margin-top: 32px; margin-bottom: 8px; }
+  .guide-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+  .guide-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .guide-card .g-tag { font-family: var(--mono); font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.10em; }
+  .guide-card .g-title { font-size: 14px; font-weight: 600; margin: 4px 0 8px; letter-spacing: -0.01em; }
+  .guide-card .g-desc { font-size: 12px; color: var(--text-2); line-height: 1.65; margin-bottom: 12px; }
+  .guide-card .g-levels { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .guide-card .g-level { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: var(--text-2); line-height: 1.5; }
+  .guide-card .g-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+  .guide-card .g-badge.up   { background: oklch(0.74 0.14 155 / 0.15); color: var(--up); }
+  .guide-card .g-badge.warn { background: oklch(0.80 0.16 75  / 0.15); color: var(--accent); }
+  .guide-card .g-badge.down { background: oklch(0.67 0.18 25  / 0.15); color: var(--down); }
+  .guide-card .g-badge.muted{ background: var(--bg-deep); color: var(--muted); }
+  .guide-card .g-sector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 4px; }
+  .guide-card .g-sector-row  { display: flex; align-items: baseline; gap: 6px; font-size: 11px; }
+  .guide-card .g-sector-row .tk { font-family: var(--mono); font-size: 10px; font-weight: 600; color: var(--muted); }
+  @media (max-width: 1100px) { .guide-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px)  { .guide-grid { grid-template-columns: 1fr; } }
 {% endblock %}
 
 {% block content %}
@@ -308,6 +327,129 @@
   </div>
 </div>
 
+{# ── Indicator Guide ───────────────────────────────────────── #}
+<div class="guide-section">
+  <div class="section-bar">
+    <div>
+      <h2>지표 가이드</h2>
+      <div class="meta">각 지표를 처음 보는 분들을 위한 읽는 방법</div>
+    </div>
+  </div>
+  <div class="guide-grid">
+
+    {# Card 1: Market Temperature #}
+    <div class="guide-card">
+      <div class="g-tag">MARKET TEMP</div>
+      <div class="g-title">시장 온도계</div>
+      <div class="g-desc">
+        VIX 레벨(30%), 섹터 모멘텀(25%), 가격 모멘텀(25%), Put/Call 비율(20%)을 가중 평균한 0~100 복합 점수입니다.
+        수치가 낮을수록 공포, 높을수록 탐욕을 나타냅니다.
+        극도의 공포 구간은 오히려 역발상 매수 기회로 해석되기도 합니다.
+      </div>
+      <div class="g-levels">
+        <div class="g-level"><span class="g-badge down">0–20 극도 공포</span><span>투자자 패닉. 역사적으로 중장기 매수 기회.</span></div>
+        <div class="g-level"><span class="g-badge down">20–40 공포</span><span>심리 위축, 방어적 포지션 선호.</span></div>
+        <div class="g-level"><span class="g-badge muted">40–65 중립</span><span>방향성 불명확, 변수 주시.</span></div>
+        <div class="g-level"><span class="g-badge warn">65–85 탐욕</span><span>낙관 과잉, 포지션 점검 권장.</span></div>
+        <div class="g-level"><span class="g-badge up">85–100 극도 탐욕</span><span>과열 신호. 조정 위험 유의.</span></div>
+      </div>
+    </div>
+
+    {# Card 2: VIX #}
+    <div class="guide-card">
+      <div class="g-tag">VIX</div>
+      <div class="g-title">S&amp;P 500 공포지수</div>
+      <div class="g-desc">
+        S&amp;P 500 옵션 가격으로 도출한 <b>향후 30일 예상 변동성</b>입니다.
+        투자자들이 하락 보험(풋옵션)을 얼마나 비싸게 사고 있는지를 반영합니다.
+        "공포지수"라고도 불리며, 주가와 대체로 반대 방향으로 움직입니다.
+      </div>
+      <div class="g-levels">
+        <div class="g-level"><span class="g-badge up">20 미만</span><span>안정 국면. 투자자 낙관, 강세장 지속.</span></div>
+        <div class="g-level"><span class="g-badge warn">20–30</span><span>경계 구간. 불확실성 증가, 주의 필요.</span></div>
+        <div class="g-level"><span class="g-badge down">30–40</span><span>공포 국면. 급락 또는 조정 진행 중.</span></div>
+        <div class="g-level"><span class="g-badge down">40 이상</span><span>극도 공포. 금융위기·코로나 수준의 패닉.</span></div>
+      </div>
+    </div>
+
+    {# Card 3: VVIX & SKEW #}
+    <div class="guide-card">
+      <div class="g-tag">VVIX · SKEW</div>
+      <div class="g-title">변동성 파생 지수</div>
+      <div class="g-desc">
+        <b>VVIX</b>는 VIX 자체의 변동성으로, 공포지수가 얼마나 불안정한지를 측정합니다. 높을수록 VIX 급등에 선행하는 경우가 많습니다.<br>
+        <b>SKEW</b>는 블랙스완(대형 폭락) 보험료 프리미엄으로, 시장이 꼬리 리스크를 얼마나 우려하는지를 나타냅니다.
+      </div>
+      <div class="g-levels">
+        <div class="g-level"><span class="g-badge up">VVIX &lt;85</span><span>안정. 공포지수 움직임이 예측 가능.</span></div>
+        <div class="g-level"><span class="g-badge down">VVIX &gt;110</span><span>불안정. VIX 급변 가능성 높음.</span></div>
+        <div class="g-level"><span class="g-badge up">SKEW &lt;130</span><span>정상 범위. 블랙스완 우려 낮음.</span></div>
+        <div class="g-level"><span class="g-badge warn">SKEW 130–150</span><span>꼬리 리스크 헤징 수요 증가.</span></div>
+        <div class="g-level"><span class="g-badge down">SKEW &gt;150</span><span>극단적 하락 대비 포지션 급증.</span></div>
+      </div>
+    </div>
+
+    {# Card 4: HYG Credit Spread #}
+    <div class="guide-card">
+      <div class="g-tag">CREDIT SPREAD</div>
+      <div class="g-title">HYG/LQD 신용 스프레드</div>
+      <div class="g-desc">
+        <b>HYG</b>(정크본드 ETF)와 <b>LQD</b>(투자등급 채권 ETF)의 가격 비율입니다.
+        비율이 떨어지면 기업 부도 위험이 높아지고 신용 시장이 스트레스 상태임을 뜻합니다.
+        현재 비율의 이상 수준은 z-score(표준편차)로 확인하세요.
+      </div>
+      <div class="g-levels">
+        <div class="g-level"><span class="g-badge up">z &gt; +1 Tight</span><span>신용 환경 양호. 기업 자금조달 원활, 경기 팽창.</span></div>
+        <div class="g-level"><span class="g-badge muted">z ≈ 0 Neutral</span><span>역사적 평균 수준.</span></div>
+        <div class="g-level"><span class="g-badge warn">z &lt; −1 Widening</span><span>스프레드 확대. 경기 둔화 우려.</span></div>
+        <div class="g-level"><span class="g-badge down">z &lt; −2 Stress</span><span>신용 위기 신호. 주식 시장 연쇄 하락 위험.</span></div>
+      </div>
+    </div>
+
+    {# Card 5: Sector Flows #}
+    <div class="guide-card">
+      <div class="g-tag">SECTOR FLOWS</div>
+      <div class="g-title">섹터 흐름 &amp; 히트맵</div>
+      <div class="g-desc">
+        11개 S&amp;P 500 섹터 ETF의 수익률과 추정 자금 흐름입니다.
+        히트맵 색상이 진할수록 수익률이 크고, 자금 흐름 막대는 순매수(+)/순매도(−) 방향을 나타냅니다.
+        <i style="color:var(--muted);font-size:10px;">자금흐름은 거래량 기반 프록시입니다.</i>
+      </div>
+      <div class="g-sector-grid">
+        <div class="g-sector-row"><span class="tk">XLK</span><span>기술 — 성장·금리 민감</span></div>
+        <div class="g-sector-row"><span class="tk">XLF</span><span>금융 — 금리 상승 수혜</span></div>
+        <div class="g-sector-row"><span class="tk">XLV</span><span>헬스케어 — 방어적</span></div>
+        <div class="g-sector-row"><span class="tk">XLE</span><span>에너지 — 원유 가격 연동</span></div>
+        <div class="g-sector-row"><span class="tk">XLI</span><span>산업재 — 경기 선행</span></div>
+        <div class="g-sector-row"><span class="tk">XLY</span><span>임의소비재 — 소비심리</span></div>
+        <div class="g-sector-row"><span class="tk">XLP</span><span>필수소비재 — 방어적</span></div>
+        <div class="g-sector-row"><span class="tk">XLU</span><span>유틸리티 — 고배당·방어적</span></div>
+        <div class="g-sector-row"><span class="tk">XLB</span><span>소재 — 인플레이션 수혜</span></div>
+        <div class="g-sector-row"><span class="tk">XLRE</span><span>부동산 — 금리·인플레 민감</span></div>
+        <div class="g-sector-row"><span class="tk">XLC</span><span>통신 — 테크·미디어 혼합</span></div>
+      </div>
+    </div>
+
+    {# Card 6: Correlation Matrix #}
+    <div class="guide-card">
+      <div class="g-tag">CORRELATION</div>
+      <div class="g-title">공포지수 × 자산 상관관계</div>
+      <div class="g-desc">
+        공포지수(VIX/VVIX/SKEW)와 주요 자산(SPY, TLT, GLD 등)의 롤링 상관계수입니다.
+        진한 초록(+1)은 같은 방향, 진한 빨강(−1)은 반대 방향으로 움직인다는 의미입니다.
+        상관관계가 갑자기 바뀌면 시장 레짐 전환 신호일 수 있습니다.
+      </div>
+      <div class="g-levels">
+        <div class="g-level"><span class="g-badge down">VIX↑ · SPY↓</span><span>일반적 패턴. 주가 하락 시 공포 상승.</span></div>
+        <div class="g-level"><span class="g-badge down">VIX↑ · TLT↑</span><span>위기 국면. 주식 팔고 안전채권으로 이동.</span></div>
+        <div class="g-level"><span class="g-badge warn">VIX↑ · GLD↑</span><span>안전자산 선호. 달러·금 동반 강세.</span></div>
+        <div class="g-level"><span class="g-badge muted">상관관계 급변</span><span>레짐 전환 신호. 기존 전략 재검토 필요.</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -355,7 +497,7 @@
     });
     const chart = echarts.init(el, null, { renderer: 'svg' });
     const down = f.change < 0;
-    const stroke = down ? 'oklch(0.74 0.14 155)' : 'oklch(0.67 0.18 25)';
+    const stroke = down ? T.up : T.down;
     chart.setOption({
       grid: { top:0, right:0, bottom:0, left:0 },
       xAxis: { type:'category', show:false, data: data.map((_,x)=>x) },
@@ -363,8 +505,8 @@
       series: [{ type:'line', data, smooth:true, symbol:'none',
         lineStyle: { width:1.4, color: stroke },
         areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[
-          { offset:0, color: stroke.replace(')', '/ 0.28)') },
-          { offset:1, color: stroke.replace(')', '/ 0)') },
+          { offset:0, color: down ? 'rgba(109,194,138,0.28)' : 'rgba(212,74,74,0.28)' },
+          { offset:1, color: down ? T.upFade : T.downFade },
         ])},
       }],
     });
@@ -445,7 +587,7 @@
           yAxis:{type:'value',show:false,scale:true},
           series:[{ type:'line', data:d.values, smooth:false, symbol:'none',
             lineStyle:{width:1.5,color:T.up},
-            areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'oklch(0.74 0.14 155 / 0.22)'},{offset:1,color:'oklch(0.74 0.14 155 / 0)'}])},
+            areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:T.upDim},{offset:1,color:T.upFade}])},
           }],
         });
       }
